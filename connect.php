@@ -1,8 +1,8 @@
 <?php
 $servername = "localhost";
-$database = "client_database";
+$database = "database";
 $username = "username";
-$password = "password";
+$password = "27Ppasswordocj2";
 // Устанавливаем соединение
 $conn = mysqli_connect($servername, $username, $password, $database);
 // Проверяем соединение
