@@ -13,30 +13,25 @@ $bot->init('php://input');
 class Bot
 {
     // <bot_token> - созданный токен для нашего бота от @BotFather
-    private $botToken = "112445570484:AAGjjhsdgfsydJGJHghX8Sez8IWL_tJHhj65hvj8Y";
+    private $botToken = "1835784897684:AAGGFhgekjHfColX8Sez8IWL_tWWQ6zP8Y";
     // адрес для запросов к API Telegram
     private $apiUrl = "https://api.telegram.org/bot";
 
     public function init($data)
     {
         // Пароль для дуступа к боту
-		$pswd = '111';
+		$pswd = '123';
 		
 		// создаем массив из пришедших данных от API Telegram
         $arrData = $this->getData($data);
 		
-        // лог
-        // $this->setFileLog($arrData);
-
         if (array_key_exists('message', $arrData)) {
             $chat_id = $arrData['message']['chat']['id'];
             $message = $arrData['message']['text'];
-			$username = $arrData['message']['from']['username'];
 
         } elseif (array_key_exists('callback_query', $arrData)) {
             $chat_id = $arrData['callback_query']['message']['chat']['id'];
             $message = $arrData['callback_query']['data'];
-			$username = $arrData['callback_query']['from']['username'];
         }
 
 		$justKeyboard = $this->getKeyBoard([[["text" => "Темы"]],
@@ -57,7 +52,7 @@ class Bot
 						'chat_id' => $chat_id,
 					);
 					require 'connect.php';
-					$conn->query("INSERT INTO bot_spisok (chatid, first_name, second_name, class, ok, theme, math) VALUES ('".$chat_id."', '0', '0', '0', '0', '0', '0')");
+					$conn->query("INSERT INTO bot_spisok (chatid, first_name, second_name, class, ok, theme, level) VALUES ('".$chat_id."', '0', '0', '0', '0', '0', '0')");
 					mysqli_close($conn);				
 					$this->requestToTelegram($dataSend, "sendMessage");
 				}
@@ -78,7 +73,7 @@ class Bot
 					$dataSend = array(
 						'text' => $txt,
 						'chat_id' => $chat_id,
-						'reply_markup' => $this->getInlineKeyBoard($this->stroimKbd('class.txt', 4)),
+						'reply_markup' => $this->getInlineKeyBoard($this->stroimKbd(0, 4)),
 					);
 					require 'connect.php';
 					$conn->query("UPDATE bot_spisok SET second_name='".$message."' WHERE chatid='".$chat_id."'");
@@ -104,7 +99,6 @@ class Bot
 			switch ($message) {
 				case 'Темы':
 					$profile = $this->getProfile($chat_id);
-					$adr = "themes".trim($profile['class']).".txt";
 					$dataSend = array(
 						'text' => 'Выберите тему по информатике '.$profile['class'].' класса.',
 						'chat_id' => $chat_id,
@@ -114,17 +108,13 @@ class Bot
 					$dataSend = array(
 						'text' => 'Темы:',
 						'chat_id' => $chat_id,
-						'reply_markup' => $this->getInlineKeyBoard($this->stroimKbd($adr, 1)),
+						'reply_markup' => $this->getInlineKeyBoard($this->stroimKbd($profile['class'], 1)),
 					);
 					$this->requestToTelegram($dataSend, "sendMessage");
 					break;
 				case '/help':
 					$dataSend = array(
-						'text' => "Значения кнопок:
-						Прослушать - Прослушать бесплатно первый подкаст, 
-						Оплатить - Оплатить доступ и слушать далее, 
-						Спросить - Получить ответы на важные вопросы, 
-						Помощь - Получить эту инструкцию ещё раз",
+						'text' => "Значения кнопок:",
 						'chat_id' => $chat_id,
 					);
 					$this->requestToTelegram($dataSend, "sendMessage");
@@ -132,11 +122,10 @@ class Bot
 				case (preg_match('/^Задания/', $message) ? true : false):
 				case (preg_match('/^Теория/', $message) ? true : false):
 					require 'connect.php';
-					$conn->query("UPDATE bot_spisok SET math='".$message."' WHERE chatid='".$chat_id."'");
+					$conn->query("UPDATE bot_spisok SET level='".$message."' WHERE chatid='".$chat_id."'");
 					$dataSend = array(
-						'text' => $message,
+						'text' => $message.': '.$this->getLink($message, $chat_id),
 						'chat_id' => $chat_id,
-						'reply_markup' => $this->getInlineKeyBoard($this->stroimKbdTh($message, $chat_id)),
 					);
 					$this->requestToTelegram($dataSend, "sendMessage");
 					break;
@@ -171,16 +160,18 @@ class Bot
 						'text' => 'Чтобы сдать работу:
 						1) загрузите вашу работу в любое облачное хранилище (Google Drive, Яндекс Диск и т.п.)
 						2) создайте ссылку на документ с возможностью редактирования
-						3) отправьте в этот чат сообщение в формате: #работа https://ссылка_на_ваш_документ',
+						3) отправьте в этот чат сообщение в формате: #работа#ID_работы#https://ссылка_на_ваш_документ
+						
+						ID работы написан в начале текста работы.',
 						'chat_id' => $chat_id,
 					);
 					$this->requestToTelegram($dataSend, "sendMessage");
 					break;				
-				case (preg_match('/^#работа/', $message) ? true : false):
-					$message = str_replace("#работа ", "", $message);
+				case (preg_match('/^#работа#/', $message) ? true : false):
+					$mes = explode('#', $message);
 					$today = date("Y-m-d H:i:s");
 					require 'connect.php';
-					$conn->query("INSERT INTO bot_work (time, chatid, url) VALUES ('".$today."', '".$chat_id."', '".$message."')");
+					$conn->query("INSERT INTO bot_work (time, chatid, idwork, url) VALUES ('".$today."', '".$chat_id."', '".$mes[2]."', '".$mes[3]."')");
 					mysqli_close($conn);
 					$dataSend = array(
 						'text' => 'Ваша работа принята',
@@ -191,7 +182,7 @@ class Bot
 				default:
 					$n=substr_count($message, '-');
 					if ($n==1) {
-						if (file_exists(trim($message).'.txt')) {
+						if ($this->themeInBase($message) == 1) {  
 							require 'connect.php';
 							$conn->query("UPDATE bot_spisok SET theme='".$message."' WHERE chatid='".$chat_id."'");
 							mysqli_close($conn);
@@ -200,7 +191,7 @@ class Bot
 								
 								Тема: '.$this->themeTxt($message, $chat_id),
 								'chat_id' => $chat_id,
-								'reply_markup' => $this->getKeyBoard($this->stroimKbdMath(trim($message).'.txt')),
+								'reply_markup' => $this->getKeyBoard($this->stroimKbdLevel($message)),
 							);
 						}
 					} else {
@@ -216,24 +207,6 @@ class Bot
 		}	
 	} 
 	
-
-    /** Меняем клавиатуру Vote
-     * @param $data
-     * @param $emogi
-     * @param $callback_query_id
-     */
-    private function changeVote($data, $emoji, $callback_query_id)
-    {
-        $text = $this->requestToTelegram($data, "editMessageReplyMarkup")
-            ? "Вы проголосовали " . hex2bin($emoji)
-            : "Непредвиденная ошибка, попробуйте позже.";
-
-        $this->requestToTelegram([
-            'callback_query_id' => $callback_query_id,
-            'text' => $text,
-            'cache_time' => 30,
-        ], "answerCallbackQuery");
-    }
 
     /**
      * создаем inline клавиатуру
@@ -346,6 +319,18 @@ class Bot
         return $result;
     }
 	
+	private	function themeInBase($data)
+    {
+        require 'connect.php';
+		$result = 0;
+		$res = $conn->query("SELECT * FROM bot_razdel WHERE razdel = '".$data."'");
+		$rows = $res->fetch_all(MYSQLI_ASSOC);
+		if ($rows) $result=1;
+		mysqli_close($conn); 
+        return $result;
+    }
+
+	
 	private	function getProfile($chat_id)
     {
         require 'connect.php';
@@ -359,15 +344,17 @@ class Bot
         return $result;
    }
    
-   	private	function stroimKbd($adr, $kolStr)
+   	private	function stroimKbd($razd, $kolStr)
     {
 		$result = [];
 		$str = [];
-		$fp = file($adr);
 		$ks = 0;
-		foreach($fp as $f) {
-			$fd = explode('#', $f);
-			$knopka = ['text' => $fd[0], 'callback_data' => $fd[1]];
+		
+        require 'connect.php';
+		$res = $conn->query("SELECT * FROM bot_razdel WHERE parent = '".$razd."'");
+		$rows = $res->fetch_all(MYSQLI_ASSOC);		
+		foreach($rows as $row) {
+			$knopka = ['text' => $row['content'], 'callback_data' => $row['razdel']];
 			array_push($str, $knopka);
 			unset($knopka);
 			$ks++;
@@ -379,71 +366,104 @@ class Bot
 			}
 		}
 		if ($ks > 0) array_push($result, $str);
+		mysqli_close($conn); 
 		return $result;
 	}
 	
 	private	function themeTxt($data, $chat_id)
     {
 		$profile = $this->getProfile($chat_id);
-		$adr = "themes".trim($profile['class']).".txt";
-		$fp = file($adr);
-		foreach($fp as $f) {
-			$fd = explode('#', $f);
-			if (trim($data) == trim($fd[1])) {
-				$result = $fd[0];
+        require 'connect.php';
+		$res = $conn->query("SELECT * FROM bot_razdel WHERE parent = '".$profile['class']."'");
+		$rows = $res->fetch_all(MYSQLI_ASSOC);		
+		foreach($rows as $row) {
+			if ($data == $row['razdel']) {
+				$result = $row['content'];
 				break;
 			}
 		}
+		mysqli_close($conn);
 		return $result;
 	}
 
-	private	function stroimKbdTh($data, $chat_id)
+	private	function getLink($data, $chat_id)
     {
 		$profile = $this->getProfile($chat_id);
-		$adr = trim($profile['theme']).".txt";
-		$str = [];
-		$result = [];
-		$fp = file($adr);
-		$flag = 0;
-		foreach($fp as $f) {
-			if ($flag == 1 && trim($f) != '@@') {
-				if (trim($f) == '@') break;
-				$fd = explode('#', $f);
-				$knopka = ['text' => $fd[0], 'url' => $fd[1]];
-				array_push($str, $knopka);
-				array_push($result, $str);
-				unset($knopka);
-				unset($str);
-				$str = [];
-			} 
-			if ($flag == 0 && trim($f) == trim($data)) $flag = 1;
-		} 
+		switch ($data) {
+			case 'Теория обязательная':
+				$data = $profile['theme'].'-tb';
+				break;
+			case 'Теория основная':
+				$data = $profile['theme'].'-ts';
+				break;
+			case 'Теория дополнительная':
+				$data = $profile['theme'].'-td';
+				break;
+			case 'Задания обязательные':
+				$data = $profile['theme'].'-zb';
+				break;
+			case 'Задания основные':
+				$data = $profile['theme'].'-zs';
+				break;
+			case 'Задания дополнительные':
+				$data = $profile['theme'].'-zd';
+				break;
+		}	
+		require 'connect.php';
+		$res = $conn->query("SELECT * FROM bot_razdel WHERE razdel = '".$data."'");
+		$rows = $res->fetch_all(MYSQLI_ASSOC);		
+		foreach($rows as $row) {
+			$result = $row['content'];
+		}
+		mysqli_close($conn);
 		return $result;
 	} 
 
-	private	function stroimKbdMath($data)
+	private	function stroimKbdLevel($data)
     {
 		$str = [];
 		$result = [];
-		$fp = file($data);
-		$flag = 0;
-		foreach($fp as $f) {
-			if(stripos($f, '#') === FALSE && stripos($f, '@') === FALSE) {
-				$knopka = ['text' => $f];
-			} elseif (!empty($knopka) && stripos($f, '#') !== FALSE) {
-				array_push($str, $knopka);
-				unset($knopka);				
-			} elseif (trim($f) == '@@' && !empty($str)) {
-				array_push($result, $str);
-				unset($str);
-				$str = [];				
+		require 'connect.php';
+		$res = $conn->query("SELECT * FROM bot_razdel WHERE parent = '".$data."'");
+		$rows = $res->fetch_all(MYSQLI_ASSOC);		
+		foreach ($rows as $row) { 
+			if (stripos($row['razdel'], 'tb')) {
+				$txt='Теория обязательная';
+				$knopka1 = ['text' => $txt];
+			} elseif (stripos($row['razdel'], 'ts')) {
+				$txt='Теория основная';
+				$knopka2 = ['text' => $txt];
+			} elseif (stripos($row['razdel'], 'td')) {
+				$txt='Теория дополнительная';
+				$knopka3 = ['text' => $txt];
+			} elseif (stripos($row['razdel'], 'zb')) {
+				$txt='Задания обязательные';
+				$knopka4 = ['text' => $txt];
+			} elseif (stripos($row['razdel'], 'zs')) {
+				$txt='Задания основные';
+				$knopka5 = ['text' => $txt];
+			} elseif (stripos($row['razdel'], 'zd')) {
+				$txt='Задания дополнительные';
+				$knopka6 = ['text' => $txt];
 			}
 		}
+		if ($knopka1) array_push($str, $knopka1);
+		if ($knopka2) array_push($str, $knopka2);
+		if ($knopka3) array_push($str, $knopka3);
 		if ($str) array_push($result, $str);
+		unset($str);
+		$str = [];
+		if ($knopka4) array_push($str, $knopka4);
+		if ($knopka5) array_push($str, $knopka5);
+		if ($knopka6) array_push($str, $knopka6);
+		if ($str) array_push($result, $str);
+		unset($str);
+		$str = [];
 		$str = [['text' => 'Темы']];
 		array_push($result, $str);
 		$str = 	[["text" => "Сдать работу"], ["text" => "Вопрос учителю"]];
 		array_push($result, $str);
+		mysqli_close($conn);
 		return $result;
 	} 
 
